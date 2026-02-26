@@ -1,268 +1,317 @@
-import React, { useState, useEffect } from 'react';
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot, query, updateDoc } from 'firebase/firestore';
-import { 
-  Fingerprint,
-  CalendarDays,
-  MapPin,
-  ArrowUpRight,
-  ArrowDownLeft,
-  Circle,
-  Hash
-} from 'lucide-react';
-
-// --- Firebase 配置 ---
-const firebaseConfig = JSON.parse(__firebase_config);
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'attendance-system-aesthetic';
-
-const App = () => {
-  const [user, setUser] = useState(null);
-  const [view, setView] = useState('home'); 
-  const [records, setRecords] = useState([]);
-  const [todayRecord, setTodayRecord] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [message, setMessage] = useState(null);
-
-  // 初始化身份驗證
-  useEffect(() => {
-    const initAuth = async () => {
-      try {
-        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-          await signInWithCustomToken(auth, __initial_auth_token);
-        } else {
-          await signInAnonymously(auth);
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CLOCK IN/OUT | Minimalist Attendance</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #f0f1f3;
+            --graphite-green: #4a5d4e;
+            --tea-brown: #a68b6d;
+            --shadow-light: #ffffff;
+            --shadow-dark: #d1d9e6;
         }
-      } catch (error) {
-        console.error("Auth error:", error);
-      }
-    };
-    initAuth();
-    const unsubscribe = onAuthStateChanged(auth, setUser);
-    return () => unsubscribe();
-  }, []);
 
-  // 獲取出勤資料
-  useEffect(() => {
-    if (!user) return;
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--graphite-green);
+            letter-spacing: 0.05em;
+            margin: 0;
+            overflow-x: hidden;
+        }
 
-    const attendanceRef = collection(db, 'artifacts', appId, 'users', user.uid, 'attendance');
-    const unsubscribe = onSnapshot(attendanceRef, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      const sortedData = data.sort((a, b) => b.date.localeCompare(a.date));
-      setRecords(sortedData);
+        /* Neumorphism 容器 */
+        .neu-card {
+            background: var(--bg-color);
+            border-radius: 30px;
+            box-shadow: 10px 10px 20px var(--shadow-dark), 
+                        -10px -10px 20px var(--shadow-light);
+        }
 
-      const todayStr = new Date().toISOString().split('T')[0];
-      const today = sortedData.find(r => r.date === todayStr);
-      setTodayRecord(today || null);
-      setLoading(false);
-    }, (error) => {
-      console.error("Firestore error:", error);
-      setLoading(false);
-    });
+        /* 打卡按鈕樣式 */
+        .punch-btn {
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            background: var(--bg-color);
+            box-shadow: 12px 12px 24px var(--shadow-dark), 
+                        -12px -12px 24px var(--shadow-light);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            border: none;
+            outline: none;
+        }
 
-    return () => unsubscribe();
-  }, [user]);
+        .punch-btn:active {
+            box-shadow: inset 6px 6px 12px var(--shadow-dark), 
+                        inset -6px -6px 12px var(--shadow-light);
+            transform: scale(0.98);
+        }
 
-  const showToast = (msg) => {
-    setMessage(msg);
-    setTimeout(() => setMessage(null), 2500);
-  };
+        /* 呼吸裝飾環 */
+        .breath-ring {
+            position: absolute;
+            width: 230px;
+            height: 230px;
+            border-radius: 50%;
+            border: 1px solid var(--tea-brown);
+            opacity: 0.3;
+            animation: breathe 4s infinite ease-in-out;
+            pointer-events: none;
+        }
 
-  const handleClockAction = async () => {
-    if (!user) return;
+        @keyframes breathe {
+            0%, 100% { transform: scale(1); opacity: 0.1; }
+            50% { transform: scale(1.1); opacity: 0.4; }
+        }
 
-    const now = new Date();
-    const dateStr = now.toISOString().split('T')[0];
-    const timeStr = now.toLocaleTimeString('zh-TW', { hour12: false, hour: '2-digit', minute: '2-digit' });
-    const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'attendance', dateStr);
+        /* 導航欄樣式 */
+        .nav-link {
+            position: relative;
+            padding-bottom: 4px;
+        }
+        .nav-link.active::after {
+            content: "";
+            position: absolute;
+            bottom: 0;
+            left: 25%;
+            width: 50%;
+            height: 2px;
+            background: var(--tea-brown);
+        }
 
-    try {
-      if (!todayRecord) {
-        await setDoc(docRef, {
-          date: dateStr,
-          clockIn: timeStr,
-          clockOut: null,
-          timestamp: Date.now()
-        });
-        showToast("上班簽到完成");
-      } else {
-        await updateDoc(docRef, {
-          clockOut: timeStr
-        });
-        showToast("下班簽退完成");
-      }
-    } catch (error) {
-      console.error("Action failed:", error);
-      showToast("連線稍有延遲，請重試");
-    }
-  };
+        /* 時間軸樣式 */
+        .timeline-item {
+            position: relative;
+            padding-left: 30px;
+            border-left: 1px solid var(--tea-brown);
+        }
+        .timeline-item::before {
+            content: "";
+            position: absolute;
+            left: -5.5px;
+            top: 0;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--tea-brown);
+        }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-[#F9F8F6]">
-        <div className="w-6 h-6 border-2 border-[#A8A29E] border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    );
-  }
+        /* Toast 輕薄提示 */
+        #toast {
+            position: fixed;
+            bottom: 40px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: rgba(74, 93, 78, 0.9);
+            color: white;
+            padding: 12px 30px;
+            border-radius: 50px;
+            font-size: 0.9rem;
+            transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 1000;
+        }
+        #toast.show {
+            transform: translateX(-50%) translateY(0);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center p-6">
 
-  return (
-    <div className="max-w-md mx-auto h-screen bg-[#F9F8F6] flex flex-col font-serif text-[#44403C] shadow-2xl overflow-hidden relative">
-      
-      {/* Toast Notification */}
-      {message && (
-        <div className="absolute top-12 left-1/2 -translate-x-1/2 z-50 bg-[#44403C]/90 backdrop-blur-md text-[#F9F8F6] px-8 py-3 rounded-full text-xs tracking-widest font-light animate-fade-in shadow-lg">
-          {message}
+    <!-- 頂部標題 -->
+    <header class="w-full max-w-md flex justify-between items-center mb-12 mt-8 px-4">
+        <h1 class="text-2xl font-light text-graphite-green">CLOCK IN/OUT</h1>
+        <div class="flex space-x-6 text-sm">
+            <button onclick="showPage('main')" id="nav-main" class="nav-link active">首頁</button>
+            <button onclick="showPage('list')" id="nav-list" class="nav-link">日記</button>
         </div>
-      )}
+    </header>
 
-      {/* Header */}
-      <header className="px-8 pt-16 pb-8">
-        <div className="flex justify-between items-end">
-          <div>
-            <h1 className="text-3xl font-medium tracking-tighter text-[#292524]">
-              {view === 'home' ? '打卡' : '通勤記錄'}
-            </h1>
-            <p className="text-[#A8A29E] text-[10px] tracking-[0.2em] mt-2 uppercase">
-              {new Date().toLocaleDateString('zh-TW', { month: 'long', day: 'numeric', weekday: 'long' })}
-            </p>
-          </div>
-          <div className="w-10 h-10 rounded-full bg-white border border-[#E7E5E4] flex items-center justify-center shadow-sm">
-            <Fingerprint size={18} className="text-[#A8A29E]" />
-          </div>
+    <!-- 主頁面：打卡 -->
+    <main id="page-main" class="w-full max-w-md flex flex-col items-center">
+        <div class="mb-16 text-center">
+            <div id="current-time" class="text-4xl font-light mb-2">00:00:00</div>
+            <div id="current-date" class="text-xs tracking-widest uppercase opacity-60">2024年10月24日 星期四</div>
         </div>
-      </header>
 
-      {/* Main Content */}
-      <main className="flex-1 overflow-y-auto px-8 py-4">
-        {view === 'home' ? (
-          <div className="space-y-12 flex flex-col items-center">
+        <div class="relative flex items-center justify-center mb-20">
+            <div class="breath-ring"></div>
+            <button onclick="handlePunch()" class="punch-btn">
+                <span id="btn-text" class="text-lg font-medium tracking-widest text-graphite-green">開啟晨間</span>
+                <span id="btn-subtext" class="text-[10px] mt-2 opacity-40">點擊記錄時光</span>
+            </button>
+        </div>
+
+        <div class="w-full grid grid-cols-2 gap-6">
+            <div class="neu-card p-6 text-center">
+                <div class="text-[10px] opacity-50 mb-1">上班</div>
+                <div id="today-start" class="text-lg font-light">-- : --</div>
+            </div>
+            <div class="neu-card p-6 text-center">
+                <div class="text-[10px] opacity-50 mb-1">下班</div>
+                <div id="today-end" class="text-lg font-light">-- : --</div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 列表頁面：出勤狀況 -->
+    <main id="page-list" class="w-full max-w-md hidden">
+        <div class="mb-8 flex justify-between items-end px-2">
+            <div>
+                <h2 class="text-xl font-light">本月紀錄</h2>
+                <p class="text-[10px] opacity-50">Monthly Time Journal</p>
+            </div>
+            <div id="month-display" class="text-sm font-medium">2024.10</div>
+        </div>
+        
+        <div class="neu-card p-8 min-h-[400px]">
+            <div id="record-container" class="space-y-8">
+                <!-- 紀錄將由此生成 -->
+                <div class="text-center py-20 opacity-30 text-sm">尚無時光遺落</div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 提示框 -->
+    <div id="toast">已為您記錄此刻</div>
+
+    <script>
+        // 狀態管理
+        let attendanceData = JSON.parse(localStorage.getItem('timeJournal')) || {};
+        
+        function getTodayKey() {
+            const now = new Date();
+            return `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
+        }
+
+        // 更新時鐘
+        function updateClock() {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('zh-TW', { hour12: false });
+            const dateStr = now.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
             
-            {/* Minimal Status Display */}
-            <div className="w-full grid grid-cols-2 gap-4">
-              <div className="bg-white/50 backdrop-blur-sm rounded-2xl p-5 border border-[#E7E5E4]/60">
-                <div className="flex items-center text-[#A8A29E] mb-2">
-                  <ArrowUpRight size={12} className="mr-1" />
-                  <span className="text-[9px] tracking-widest uppercase font-bold">Clock In</span>
-                </div>
-                <p className="text-xl font-light tracking-tight">{todayRecord?.clockIn || '--:--'}</p>
-              </div>
-              <div className="bg-white/50 backdrop-blur-sm rounded-2xl p-5 border border-[#E7E5E4]/60">
-                <div className="flex items-center text-[#A8A29E] mb-2">
-                  <ArrowDownLeft size={12} className="mr-1" />
-                  <span className="text-[9px] tracking-widest uppercase font-bold">Clock Out</span>
-                </div>
-                <p className="text-xl font-light tracking-tight">{todayRecord?.clockOut || '--:--'}</p>
-              </div>
-            </div>
+            const timeEl = document.getElementById('current-time');
+            const dateEl = document.getElementById('current-date');
+            if(timeEl) timeEl.textContent = timeStr;
+            if(dateEl) dateEl.textContent = dateStr;
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
 
-            {/* Aesthetic Clock Button */}
-            <div className="relative py-10">
-              {/* Outer Ring Animation */}
-              <div className="absolute inset-0 rounded-full border border-[#E7E5E4] scale-125 opacity-20 animate-ping"></div>
-              
-              <button 
-                onClick={handleClockAction}
-                className="relative w-48 h-48 rounded-full bg-[#F5F5F4] border border-[#E7E5E4] shadow-[12px_12px_24px_#e3e3e0,-12px_-12px_24px_#ffffff] flex flex-col items-center justify-center active:scale-95 transition-all duration-300 group overflow-hidden"
-              >
-                {/* Visual Accent */}
-                <div className={`absolute top-0 left-0 w-full h-1 transition-colors duration-500 ${!todayRecord ? 'bg-[#57534E]' : 'bg-[#A8A29E]'}`}></div>
-                
-                <div className="z-10 flex flex-col items-center">
-                  <span className="text-[10px] tracking-[0.4em] text-[#A8A29E] uppercase mb-3 font-semibold">
-                    {todayRecord ? 'Recording' : 'Standby'}
-                  </span>
-                  <div className="relative mb-2">
-                    <Circle size={40} className={`${!todayRecord ? 'text-[#57534E]' : 'text-[#D6D3D1]'} transition-colors duration-500`} strokeWidth={1} />
-                    <div className={`absolute inset-0 flex items-center justify-center text-[10px] font-bold ${!todayRecord ? 'text-[#57534E]' : 'text-[#D6D3D1]'}`}>
-                      {todayRecord ? 'PM' : 'AM'}
-                    </div>
-                  </div>
-                  <span className="text-sm font-medium tracking-widest text-[#57534E] mt-2">
-                    {!todayRecord ? '上班' : '下班'}
-                  </span>
-                </div>
+        // 頁面切換
+        function showPage(page) {
+            document.getElementById('page-main').classList.toggle('hidden', page !== 'main');
+            document.getElementById('page-list').classList.toggle('hidden', page !== 'list');
+            document.getElementById('nav-main').classList.toggle('active', page === 'main');
+            document.getElementById('nav-list').classList.toggle('active', page === 'list');
+            
+            if (page === 'list') renderRecords();
+            if (page === 'main') updateTodayDisplay();
+        }
 
-                {/* Hover/Active Effect */}
-                <div className="absolute inset-0 bg-[#57534E]/0 group-active:bg-[#57534E]/5 transition-colors"></div>
-              </button>
-            </div>
+        // 打卡邏輯
+        function handlePunch() {
+            const now = new Date();
+            const todayKey = getTodayKey();
+            const timeStr = now.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false });
+            
+            if (!attendanceData[todayKey]) {
+                // 第一次打卡：上班
+                attendanceData[todayKey] = {
+                    date: todayKey,
+                    displayDate: `${now.getMonth()+1}/${now.getDate()}`,
+                    start: timeStr,
+                    end: null
+                };
+                showToast("上班已開啟");
+            } else {
+                // 第二次以上：更新下班
+                attendanceData[todayKey].end = timeStr;
+                showToast("下班已記錄");
+            }
 
-            <div className="flex items-center text-[#A8A29E] text-[10px] tracking-widest uppercase font-medium">
-              <MapPin size={12} className="mr-2" />
-              <span>Office . Asmedia</span>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-6 pb-20">
-            {records.length === 0 ? (
-              <div className="text-center py-20 text-[#A8A29E]">
-                <p className="text-xs tracking-widest">目前尚無留下的痕跡</p>
-              </div>
-            ) : (
-              records.map((item) => (
-                <div key={item.id} className="group flex items-start space-x-6">
-                  <div className="flex flex-col items-center">
-                    <span className="text-xs font-bold text-[#57534E] leading-none mb-1">{item.date.split('-')[2]}</span>
-                    <span className="text-[8px] text-[#A8A29E] uppercase tracking-tighter">{item.date.split('-')[1]}月</span>
-                    <div className="w-px h-12 bg-[#E7E5E4] my-2 group-last:hidden"></div>
-                  </div>
-                  <div className="flex-1 bg-white/40 rounded-2xl p-4 border border-[#E7E5E4]/40 hover:bg-white transition-colors">
-                    <div className="flex justify-between items-center">
-                      <div className="space-y-1">
-                        <div className="flex items-center space-x-4">
-                          <span className="text-xs text-[#78716C] flex items-center">
-                            <Hash size={10} className="mr-1 opacity-50" /> {item.clockIn}
-                          </span>
-                          {item.clockOut && (
-                            <span className="text-xs text-[#A8A29E] flex items-center">
-                              <Hash size={10} className="mr-1 opacity-50" /> {item.clockOut}
-                            </span>
-                          )}
+            localStorage.setItem('timeJournal', JSON.stringify(attendanceData));
+            updateTodayDisplay();
+            
+            // 按鈕視覺反饋
+            const btn = document.querySelector('.punch-btn');
+            btn.style.boxShadow = "inset 6px 6px 12px var(--shadow-dark), inset -6px -6px 12px var(--shadow-light)";
+            setTimeout(() => {
+                btn.style.boxShadow = "";
+            }, 200);
+        }
+
+        // 更新今日數值
+        function updateTodayDisplay() {
+            const todayKey = getTodayKey();
+            const data = attendanceData[todayKey];
+            const btnText = document.getElementById('btn-text');
+            
+            if (data) {
+                document.getElementById('today-start').textContent = data.start;
+                document.getElementById('today-end').textContent = data.end || "-- : --";
+                btnText.textContent = "下班";
+            } else {
+                document.getElementById('today-start').textContent = "-- : --";
+                document.getElementById('today-end').textContent = "-- : --";
+                btnText.textContent = "上班";
+            }
+        }
+
+        // 渲染紀錄列表
+        function renderRecords() {
+            const container = document.getElementById('record-container');
+            const sortedKeys = Object.keys(attendanceData).sort((a, b) => new Date(b) - new Date(a));
+            
+            if (sortedKeys.length === 0) {
+                container.innerHTML = `<div class="text-center py-20 opacity-30 text-sm">尚無時光遺落</div>`;
+                return;
+            }
+
+            container.innerHTML = sortedKeys.map(key => {
+                const item = attendanceData[key];
+                return `
+                    <div class="timeline-item">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <div class="text-sm font-medium text-tea-brown mb-1">${item.displayDate}</div>
+                                <div class="text-[10px] opacity-40 uppercase">Journal Entry</div>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-xs font-light">
+                                    <span class="opacity-50">晨</span> ${item.start}
+                                </div>
+                                <div class="text-xs font-light mt-1">
+                                    <span class="opacity-50">暮</span> ${item.end || '尚未記錄'}
+                                </div>
+                            </div>
                         </div>
-                        <p className="text-[10px] text-[#A8A29E] italic">
-                          {item.clockOut ? '完成了今天的工作。' : '正在辦公室努力中...'}
-                        </p>
-                      </div>
-                      <div className={`w-2 h-2 rounded-full ${item.clockOut ? 'bg-[#A8A29E]/30' : 'bg-green-200 animate-pulse'}`}></div>
                     </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-      </main>
+                `;
+            }).join('');
+        }
 
-      {/* Elegant Nav Bar */}
-      <nav className="absolute bottom-0 left-0 right-0 h-24 bg-[#F9F8F6]/80 backdrop-blur-xl flex items-center justify-around px-12 border-t border-[#E7E5E4]/50">
-        <button 
-          onClick={() => setView('home')}
-          className={`flex flex-col items-center transition-all duration-300 ${view === 'home' ? 'text-[#292524] scale-110' : 'text-[#D6D3D1]'}`}
-        >
-          <div className={`p-2 rounded-xl ${view === 'home' ? 'bg-[#57534E]/5' : ''}`}>
-            <Fingerprint size={20} strokeWidth={view === 'home' ? 2 : 1.5} />
-          </div>
-          <span className="text-[8px] tracking-[0.2em] uppercase mt-1 font-bold">Log</span>
-        </button>
-        <button 
-          onClick={() => setView('history')}
-          className={`flex flex-col items-center transition-all duration-300 ${view === 'history' ? 'text-[#292524] scale-110' : 'text-[#D6D3D1]'}`}
-        >
-          <div className={`p-2 rounded-xl ${view === 'history' ? 'bg-[#57534E]/5' : ''}`}>
-            <CalendarDays size={20} strokeWidth={view === 'history' ? 2 : 1.5} />
-          </div>
-          <span className="text-[8px] tracking-[0.2em] uppercase mt-1 font-bold">History</span>
-        </button>
-      </nav>
+        // Toast 提示
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
 
-      {/* Aesthetic Decor */}
-      <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-[#57534E]/5 rounded-full blur-3xl pointer-events-none"></div>
-    </div>
-  );
-};
-
-export default App;
+        // 初始化
+        updateTodayDisplay();
+    </script>
+</body>
+</html>
