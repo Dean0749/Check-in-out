@@ -1,0 +1,268 @@
+import React, { useState, useEffect } from 'react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
+import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot, query, updateDoc } from 'firebase/firestore';
+import { 
+  Fingerprint,
+  CalendarDays,
+  MapPin,
+  ArrowUpRight,
+  ArrowDownLeft,
+  Circle,
+  Hash
+} from 'lucide-react';
+
+// --- Firebase 配置 ---
+const firebaseConfig = JSON.parse(__firebase_config);
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'attendance-system-aesthetic';
+
+const App = () => {
+  const [user, setUser] = useState(null);
+  const [view, setView] = useState('home'); 
+  const [records, setRecords] = useState([]);
+  const [todayRecord, setTodayRecord] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState(null);
+
+  // 初始化身份驗證
+  useEffect(() => {
+    const initAuth = async () => {
+      try {
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
+        }
+      } catch (error) {
+        console.error("Auth error:", error);
+      }
+    };
+    initAuth();
+    const unsubscribe = onAuthStateChanged(auth, setUser);
+    return () => unsubscribe();
+  }, []);
+
+  // 獲取出勤資料
+  useEffect(() => {
+    if (!user) return;
+
+    const attendanceRef = collection(db, 'artifacts', appId, 'users', user.uid, 'attendance');
+    const unsubscribe = onSnapshot(attendanceRef, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const sortedData = data.sort((a, b) => b.date.localeCompare(a.date));
+      setRecords(sortedData);
+
+      const todayStr = new Date().toISOString().split('T')[0];
+      const today = sortedData.find(r => r.date === todayStr);
+      setTodayRecord(today || null);
+      setLoading(false);
+    }, (error) => {
+      console.error("Firestore error:", error);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+  const showToast = (msg) => {
+    setMessage(msg);
+    setTimeout(() => setMessage(null), 2500);
+  };
+
+  const handleClockAction = async () => {
+    if (!user) return;
+
+    const now = new Date();
+    const dateStr = now.toISOString().split('T')[0];
+    const timeStr = now.toLocaleTimeString('zh-TW', { hour12: false, hour: '2-digit', minute: '2-digit' });
+    const docRef = doc(db, 'artifacts', appId, 'users', user.uid, 'attendance', dateStr);
+
+    try {
+      if (!todayRecord) {
+        await setDoc(docRef, {
+          date: dateStr,
+          clockIn: timeStr,
+          clockOut: null,
+          timestamp: Date.now()
+        });
+        showToast("上班簽到完成");
+      } else {
+        await updateDoc(docRef, {
+          clockOut: timeStr
+        });
+        showToast("下班簽退完成");
+      }
+    } catch (error) {
+      console.error("Action failed:", error);
+      showToast("連線稍有延遲，請重試");
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-[#F9F8F6]">
+        <div className="w-6 h-6 border-2 border-[#A8A29E] border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-md mx-auto h-screen bg-[#F9F8F6] flex flex-col font-serif text-[#44403C] shadow-2xl overflow-hidden relative">
+      
+      {/* Toast Notification */}
+      {message && (
+        <div className="absolute top-12 left-1/2 -translate-x-1/2 z-50 bg-[#44403C]/90 backdrop-blur-md text-[#F9F8F6] px-8 py-3 rounded-full text-xs tracking-widest font-light animate-fade-in shadow-lg">
+          {message}
+        </div>
+      )}
+
+      {/* Header */}
+      <header className="px-8 pt-16 pb-8">
+        <div className="flex justify-between items-end">
+          <div>
+            <h1 className="text-3xl font-medium tracking-tighter text-[#292524]">
+              {view === 'home' ? '打卡' : '通勤記錄'}
+            </h1>
+            <p className="text-[#A8A29E] text-[10px] tracking-[0.2em] mt-2 uppercase">
+              {new Date().toLocaleDateString('zh-TW', { month: 'long', day: 'numeric', weekday: 'long' })}
+            </p>
+          </div>
+          <div className="w-10 h-10 rounded-full bg-white border border-[#E7E5E4] flex items-center justify-center shadow-sm">
+            <Fingerprint size={18} className="text-[#A8A29E]" />
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="flex-1 overflow-y-auto px-8 py-4">
+        {view === 'home' ? (
+          <div className="space-y-12 flex flex-col items-center">
+            
+            {/* Minimal Status Display */}
+            <div className="w-full grid grid-cols-2 gap-4">
+              <div className="bg-white/50 backdrop-blur-sm rounded-2xl p-5 border border-[#E7E5E4]/60">
+                <div className="flex items-center text-[#A8A29E] mb-2">
+                  <ArrowUpRight size={12} className="mr-1" />
+                  <span className="text-[9px] tracking-widest uppercase font-bold">Clock In</span>
+                </div>
+                <p className="text-xl font-light tracking-tight">{todayRecord?.clockIn || '--:--'}</p>
+              </div>
+              <div className="bg-white/50 backdrop-blur-sm rounded-2xl p-5 border border-[#E7E5E4]/60">
+                <div className="flex items-center text-[#A8A29E] mb-2">
+                  <ArrowDownLeft size={12} className="mr-1" />
+                  <span className="text-[9px] tracking-widest uppercase font-bold">Clock Out</span>
+                </div>
+                <p className="text-xl font-light tracking-tight">{todayRecord?.clockOut || '--:--'}</p>
+              </div>
+            </div>
+
+            {/* Aesthetic Clock Button */}
+            <div className="relative py-10">
+              {/* Outer Ring Animation */}
+              <div className="absolute inset-0 rounded-full border border-[#E7E5E4] scale-125 opacity-20 animate-ping"></div>
+              
+              <button 
+                onClick={handleClockAction}
+                className="relative w-48 h-48 rounded-full bg-[#F5F5F4] border border-[#E7E5E4] shadow-[12px_12px_24px_#e3e3e0,-12px_-12px_24px_#ffffff] flex flex-col items-center justify-center active:scale-95 transition-all duration-300 group overflow-hidden"
+              >
+                {/* Visual Accent */}
+                <div className={`absolute top-0 left-0 w-full h-1 transition-colors duration-500 ${!todayRecord ? 'bg-[#57534E]' : 'bg-[#A8A29E]'}`}></div>
+                
+                <div className="z-10 flex flex-col items-center">
+                  <span className="text-[10px] tracking-[0.4em] text-[#A8A29E] uppercase mb-3 font-semibold">
+                    {todayRecord ? 'Recording' : 'Standby'}
+                  </span>
+                  <div className="relative mb-2">
+                    <Circle size={40} className={`${!todayRecord ? 'text-[#57534E]' : 'text-[#D6D3D1]'} transition-colors duration-500`} strokeWidth={1} />
+                    <div className={`absolute inset-0 flex items-center justify-center text-[10px] font-bold ${!todayRecord ? 'text-[#57534E]' : 'text-[#D6D3D1]'}`}>
+                      {todayRecord ? 'PM' : 'AM'}
+                    </div>
+                  </div>
+                  <span className="text-sm font-medium tracking-widest text-[#57534E] mt-2">
+                    {!todayRecord ? '上班' : '下班'}
+                  </span>
+                </div>
+
+                {/* Hover/Active Effect */}
+                <div className="absolute inset-0 bg-[#57534E]/0 group-active:bg-[#57534E]/5 transition-colors"></div>
+              </button>
+            </div>
+
+            <div className="flex items-center text-[#A8A29E] text-[10px] tracking-widest uppercase font-medium">
+              <MapPin size={12} className="mr-2" />
+              <span>Office . Asmedia</span>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-6 pb-20">
+            {records.length === 0 ? (
+              <div className="text-center py-20 text-[#A8A29E]">
+                <p className="text-xs tracking-widest">目前尚無留下的痕跡</p>
+              </div>
+            ) : (
+              records.map((item) => (
+                <div key={item.id} className="group flex items-start space-x-6">
+                  <div className="flex flex-col items-center">
+                    <span className="text-xs font-bold text-[#57534E] leading-none mb-1">{item.date.split('-')[2]}</span>
+                    <span className="text-[8px] text-[#A8A29E] uppercase tracking-tighter">{item.date.split('-')[1]}月</span>
+                    <div className="w-px h-12 bg-[#E7E5E4] my-2 group-last:hidden"></div>
+                  </div>
+                  <div className="flex-1 bg-white/40 rounded-2xl p-4 border border-[#E7E5E4]/40 hover:bg-white transition-colors">
+                    <div className="flex justify-between items-center">
+                      <div className="space-y-1">
+                        <div className="flex items-center space-x-4">
+                          <span className="text-xs text-[#78716C] flex items-center">
+                            <Hash size={10} className="mr-1 opacity-50" /> {item.clockIn}
+                          </span>
+                          {item.clockOut && (
+                            <span className="text-xs text-[#A8A29E] flex items-center">
+                              <Hash size={10} className="mr-1 opacity-50" /> {item.clockOut}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-[#A8A29E] italic">
+                          {item.clockOut ? '完成了今天的工作。' : '正在辦公室努力中...'}
+                        </p>
+                      </div>
+                      <div className={`w-2 h-2 rounded-full ${item.clockOut ? 'bg-[#A8A29E]/30' : 'bg-green-200 animate-pulse'}`}></div>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+      </main>
+
+      {/* Elegant Nav Bar */}
+      <nav className="absolute bottom-0 left-0 right-0 h-24 bg-[#F9F8F6]/80 backdrop-blur-xl flex items-center justify-around px-12 border-t border-[#E7E5E4]/50">
+        <button 
+          onClick={() => setView('home')}
+          className={`flex flex-col items-center transition-all duration-300 ${view === 'home' ? 'text-[#292524] scale-110' : 'text-[#D6D3D1]'}`}
+        >
+          <div className={`p-2 rounded-xl ${view === 'home' ? 'bg-[#57534E]/5' : ''}`}>
+            <Fingerprint size={20} strokeWidth={view === 'home' ? 2 : 1.5} />
+          </div>
+          <span className="text-[8px] tracking-[0.2em] uppercase mt-1 font-bold">Log</span>
+        </button>
+        <button 
+          onClick={() => setView('history')}
+          className={`flex flex-col items-center transition-all duration-300 ${view === 'history' ? 'text-[#292524] scale-110' : 'text-[#D6D3D1]'}`}
+        >
+          <div className={`p-2 rounded-xl ${view === 'history' ? 'bg-[#57534E]/5' : ''}`}>
+            <CalendarDays size={20} strokeWidth={view === 'history' ? 2 : 1.5} />
+          </div>
+          <span className="text-[8px] tracking-[0.2em] uppercase mt-1 font-bold">History</span>
+        </button>
+      </nav>
+
+      {/* Aesthetic Decor */}
+      <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-[#57534E]/5 rounded-full blur-3xl pointer-events-none"></div>
+    </div>
+  );
+};
+
+export default App;
