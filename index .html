@@ -311,7 +311,11 @@
         }
 
         // 初始化
-        updateTodayDisplay();
+        window.onload = function() {
+    updateClock();
+    updateTodayDisplay();
+};
     </script>
 </body>
 </html>
+
