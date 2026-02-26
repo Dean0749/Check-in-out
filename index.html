@@ -4,75 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>時光記事 | Minimalist Attendance</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500&display=swap" rel="stylesheet">
+    <script src="[https://cdn.tailwindcss.com](https://cdn.tailwindcss.com)"></script>
+    <link href="[https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500&display=swap](https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500&display=swap)" rel="stylesheet">
     <style>
-        :root {
-            --bg-color: #f0f1f3;
-            --graphite-green: #4a5d4e;
-            --tea-brown: #a68b6d;
-            --shadow-light: #ffffff;
-            --shadow-dark: #d1d9e6;
-        }
-        body {
-            background-color: var(--bg-color);
-            font-family: 'Noto Sans TC', sans-serif;
-            color: var(--graphite-green);
-            margin: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            min-height: 100vh;
-        }
-        .neu-card {
-            background: var(--bg-color);
-            border-radius: 24px;
-            box-shadow: 8px 8px 16px var(--shadow-dark), -8px -8px 16px var(--shadow-light);
-        }
-        .punch-btn {
-            width: 200px;
-            height: 200px;
-            border-radius: 50%;
-            background: var(--bg-color);
-            box-shadow: 10px 10px 20px var(--shadow-dark), -10px -10px 20px var(--shadow-light);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            border: none;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-        .punch-btn:active {
-            box-shadow: inset 6px 6px 12px var(--shadow-dark), inset -6px -6px 12px var(--shadow-light);
-            transform: scale(0.98);
-        }
-        .breath-ring {
-            position: absolute;
-            width: 230px;
-            height: 230px;
-            border-radius: 50%;
-            border: 1px solid var(--tea-brown);
-            opacity: 0.2;
-            animation: pulse 3s infinite;
-            pointer-events: none;
-        }
-        @keyframes pulse {
-            0% { transform: scale(1); opacity: 0.2; }
-            50% { transform: scale(1.1); opacity: 0.05; }
-            100% { transform: scale(1); opacity: 0.2; }
-        }
-        #toast {
-            position: fixed;
-            bottom: 30px;
-            background: var(--graphite-green);
-            color: white;
-            padding: 12px 24px;
-            border-radius: 50px;
-            opacity: 0;
-            transition: 0.3s;
-            z-index: 100;
-        }
+        :root { --bg-color: #f0f1f3; --graphite-green: #4a5d4e; --tea-brown: #a68b6d; --shadow-light: #ffffff; --shadow-dark: #d1d9e6; }
+        body { background-color: var(--bg-color); font-family: 'Noto Sans TC', sans-serif; color: var(--graphite-green); margin: 0; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+        .neu-card { background: var(--bg-color); border-radius: 24px; box-shadow: 8px 8px 16px var(--shadow-dark), -8px -8px 16px var(--shadow-light); }
+        .punch-btn { width: 200px; height: 200px; border-radius: 50%; background: var(--bg-color); box-shadow: 10px 10px 20px var(--shadow-dark), -10px -10px 20px var(--shadow-light); display: flex; flex-direction: column; align-items: center; justify-content: center; border: none; cursor: pointer; transition: all 0.3s ease; outline: none; -webkit-tap-highlight-color: transparent; }
+        .punch-btn:active { box-shadow: inset 6px 6px 12px var(--shadow-dark), inset -6px -6px 12px var(--shadow-light); transform: scale(0.98); }
+        .breath-ring { position: absolute; width: 230px; height: 230px; border-radius: 50%; border: 1px solid var(--tea-brown); opacity: 0.2; animation: pulse 3s infinite; pointer-events: none; }
+        @keyframes pulse { 0% { transform: scale(1); opacity: 0.2; } 50% { transform: scale(1.1); opacity: 0.05; } 100% { transform: scale(1); opacity: 0.2; } }
+        #toast { position: fixed; bottom: 30px; background: var(--graphite-green); color: white; padding: 12px 24px; border-radius: 50px; opacity: 0; transition: 0.3s; z-index: 100; pointer-events: none; }
         #toast.show { opacity: 1; }
         .hidden { display: none; }
     </style>
@@ -81,15 +23,14 @@
     <header class="w-full max-w-md flex justify-between items-center mb-12 mt-8 px-4">
         <h1 class="text-2xl font-light">時光記事</h1>
         <div class="flex space-x-6 text-sm">
-            <button onclick="showPage('main')" id="nav-main" class="opacity-100 font-bold">首頁</button>
-            <button onclick="showPage('list')" id="nav-list" class="opacity-40">日記</button>
+            <button onclick="showPage('main')" id="nav-main" style="opacity: 1; font-weight: bold;">首頁</button>
+            <button onclick="showPage('list')" id="nav-list" style="opacity: 0.4;">日記</button>
         </div>
     </header>
-
     <main id="page-main" class="w-full max-w-md flex flex-col items-center">
         <div class="mb-16 text-center">
             <div id="current-time" class="text-4xl font-light mb-2">00:00:00</div>
-            <div id="current-date" class="text-xs tracking-widest opacity-60">2024年</div>
+            <div id="current-date" class="text-xs tracking-widest opacity-60">載入中...</div>
         </div>
         <div class="relative flex items-center justify-center mb-20">
             <div class="breath-ring"></div>
@@ -109,18 +50,14 @@
             </div>
         </div>
     </main>
-
     <main id="page-list" class="w-full max-w-md hidden">
         <div class="neu-card p-8 min-h-[300px]" id="record-container">
             <div class="text-center py-10 opacity-30">尚無紀錄</div>
         </div>
     </main>
-
     <div id="toast">已記錄此刻</div>
-
     <script>
         let attendanceData = JSON.parse(localStorage.getItem('timeJournal')) || {};
-
         function updateClock() {
             const now = new Date();
             document.getElementById('current-time').textContent = now.toLocaleTimeString('zh-TW', { hour12: false });
@@ -128,12 +65,10 @@
         }
         setInterval(updateClock, 1000);
         updateClock();
-
         function handlePunch() {
             const now = new Date();
             const key = `${now.getFullYear()}-${now.getMonth()+1}-${now.getDate()}`;
             const time = now.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false });
-            
             if (!attendanceData[key]) {
                 attendanceData[key] = { start: time, end: null, date: `${now.getMonth()+1}/${now.getDate()}` };
                 showToast("晨間生活已開啟");
@@ -144,7 +79,6 @@
             localStorage.setItem('timeJournal', JSON.stringify(attendanceData));
             updateUI();
         }
-
         function updateUI() {
             const now = new Date();
             const key = `${now.getFullYear()}-${now.getMonth()+1}-${now.getDate()}`;
@@ -153,20 +87,29 @@
             document.getElementById('today-end').textContent = (data && data.end) ? data.end : "-- : --";
             document.getElementById('btn-text').textContent = data ? "記錄暮色" : "開啟晨間";
         }
-
         function showPage(page) {
             document.getElementById('page-main').classList.toggle('hidden', page !== 'main');
             document.getElementById('page-list').classList.toggle('hidden', page !== 'list');
             document.getElementById('nav-main').style.opacity = page === 'main' ? "1" : "0.4";
             document.getElementById('nav-list').style.opacity = page === 'list' ? "1" : "0.4";
+            if(page === 'list') renderList();
         }
-
+        function renderList() {
+            const container = document.getElementById('record-container');
+            const keys = Object.keys(attendanceData).sort((a,b) => new Date(b) - new Date(a));
+            if(keys.length === 0) return;
+            container.innerHTML = keys.map(k => `
+                <div style="display:flex; justify-content:space-between; border-bottom:1px solid #ddd; padding:10px 0;">
+                    <div>${attendanceData[k].date}</div>
+                    <div style="text-align:right">晨 ${attendanceData[k].start}<br>暮 ${attendanceData[k].end || '--'}</div>
+                </div>
+            `).join('');
+        }
         function showToast(msg) {
             const t = document.getElementById('toast');
             t.textContent = msg; t.classList.add('show');
             setTimeout(() => t.classList.remove('show'), 3000);
         }
-
         updateUI();
     </script>
 </body>
