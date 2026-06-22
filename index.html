@@ -193,6 +193,8 @@
             <button onclick="handlePunch()" class="punch-btn">
                 <span id="btn-text" class="text-xl font-medium tracking-[0.2em] text-graphite-green">上班</span>
                 <span id="btn-subtext" class="text-[10px] mt-2 opacity-40">TAP TO LOG TIME</span>
+                <!-- 調整：將預計下班時間移至圈圈內，且字體大小與樣式和 subtext 一致 -->
+                <span id="btn-estimate" class="text-[10px] mt-1 opacity-40 hidden">預估下班 --:--</span>
             </button>
         </div>
 
@@ -200,6 +202,8 @@
             <div class="neu-card p-6 text-center cursor-pointer" onclick="openEditModal('start')">
                 <div class="text-[10px] opacity-50 mb-1">今日上班</div>
                 <div id="today-start" class="text-lg font-light">-- : --</div>
+                <!-- 保持原本微型提示，雙重保障 -->
+                <div id="off-work-reminder" class="text-[9px] text-tea-brown font-medium mt-1 hidden">預計下班 --:--</div>
                 <div class="text-[8px] opacity-30 mt-1">點擊修改</div>
             </div>
             <div class="neu-card p-6 text-center cursor-pointer" onclick="openEditModal('end')">
@@ -313,6 +317,40 @@
             } else {
                 tag.classList.add('hidden');
             }
+
+            // 即時比對九小時下班計時提醒與預計下班顯示
+            const data = attendanceData[todayKey];
+            const subtextEl = document.getElementById('btn-subtext');
+            const estimateEl = document.getElementById('btn-estimate');
+            if (data && data.start && !data.end) {
+                const [h, m] = data.start.split(':').map(Number);
+                const targetTime = new Date();
+                targetTime.setHours(h, m, 0, 0);
+                targetTime.setHours(targetTime.getHours() + 9); // 設定 9 小時後
+
+                // 格式化預計下班時間
+                const targetHStr = String(targetTime.getHours()).padStart(2, '0');
+                const targetMStr = String(targetTime.getMinutes()).padStart(2, '0');
+                if (estimateEl) {
+                    estimateEl.textContent = `預計下班 ${targetHStr}:${targetMStr}`;
+                    estimateEl.classList.remove('hidden');
+                }
+
+                if (now >= targetTime) {
+                    subtextEl.textContent = "已達下班時間！";
+                    subtextEl.classList.add('text-amber-600', 'font-medium', 'animate-pulse');
+                } else {
+                    const diffMs = targetTime - now;
+                    const diffHrs = Math.floor(diffMs / (1000 * 60 * 60));
+                    const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+                    subtextEl.textContent = `再過 ${diffHrs} 小時 ${diffMins} 分下班`;
+                    subtextEl.classList.remove('text-amber-600', 'font-medium', 'animate-pulse');
+                }
+            } else {
+                subtextEl.textContent = "TAP TO LOG TIME";
+                subtextEl.classList.remove('text-amber-600', 'font-medium', 'animate-pulse');
+                if (estimateEl) estimateEl.classList.add('hidden');
+            }
         }
         setInterval(updateClock, 1000);
         updateClock();
@@ -348,21 +386,48 @@
 
             localStorage.setItem('timeJournal', JSON.stringify(attendanceData));
             updateTodayDisplay();
+            updateClock();
         }
 
         function updateTodayDisplay() {
             const todayKey = getTodayKey();
             const data = attendanceData[todayKey];
             const btnText = document.getElementById('btn-text');
+            const reminderEl = document.getElementById('off-work-reminder');
+            const estimateEl = document.getElementById('btn-estimate');
             
             if (data) {
                 document.getElementById('today-start').textContent = data.start || "-- : --";
                 document.getElementById('today-end').textContent = data.end || "-- : --";
                 btnText.textContent = "下班";
+
+                // 計算並顯示 9 小時後的時間於卡片內
+                if (data.start) {
+                    const [h, m] = data.start.split(':').map(Number);
+                    const targetH = (h + 9) % 24;
+                    const targetHStr = String(targetH).padStart(2, '0');
+                    const targetMStr = String(m).padStart(2, '0');
+                    const timeStr = `${targetHStr}:${targetMStr}`;
+                    
+                    reminderEl.textContent = `預計下班 ${timeStr}`;
+                    reminderEl.classList.remove('hidden');
+
+                    if (estimateEl && !data.end) {
+                        estimateEl.textContent = `預計下班 ${timeStr}`;
+                        estimateEl.classList.remove('hidden');
+                    } else if (data.end && estimateEl) {
+                        estimateEl.classList.add('hidden');
+                    }
+                } else {
+                    reminderEl.classList.add('hidden');
+                    if (estimateEl) estimateEl.classList.add('hidden');
+                }
             } else {
                 document.getElementById('today-start').textContent = "-- : --";
                 document.getElementById('today-end').textContent = "-- : --";
                 btnText.textContent = "上班";
+                reminderEl.classList.add('hidden');
+                if (estimateEl) estimateEl.classList.add('hidden');
             }
         }
 
@@ -411,6 +476,7 @@
             closeModal();
             updateTodayDisplay();
             renderRecords();
+            updateClock();
         }
 
         function renderRecords() {
@@ -423,7 +489,6 @@
             const daysInMonth = new Date(year, month + 1, 0).getDate();
             
             let html = "";
-            // 從 1 號開始遞增
             for (let d = 1; d <= daysInMonth; d++) {
                 const dateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
                 const item = attendanceData[dateKey];
